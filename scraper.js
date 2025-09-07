@@ -1,32 +1,31 @@
-async function scrape() {
-  const url = document.getElementById("urlInput").value;
-  const gallery = document.getElementById("gallery");
-  gallery.innerHTML = "⏳ Scraping...";
+const axios = require("axios");
+const cheerio = require("cheerio");
+
+module.exports = async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) {
+    return res.status(400).json({ error: "Missing URL parameter" });
+  }
 
   try {
-    const res = await fetch(`/api/scraper?url=${encodeURIComponent(url)}`);
-    const data = await res.json();
+    const response = await axios.get(targetUrl, { timeout: 10000 });
+    const $ = cheerio.load(response.data);
 
-    if (!data.results || data.results.length === 0) {
-      gallery.innerHTML = "⚠️ No images or videos found.";
-      return;
-    }
+    let results = [];
 
-    gallery.innerHTML = "";
-    data.results.forEach(src => {
-      if (src.endsWith(".mp4") || src.includes("video")) {
-        const vid = document.createElement("video");
-        vid.src = src;
-        vid.controls = true;
-        gallery.appendChild(vid);
-      } else {
-        const img = document.createElement("img");
-        img.src = src;
-        gallery.appendChild(img);
-      }
+    $("img").each((_, el) => {
+      const src = $(el).attr("src");
+      if (src) results.push(src);
     });
+
+    $("video source").each((_, el) => {
+      const src = $(el).attr("src");
+      if (src) results.push(src);
+    });
+
+    results = [...new Set(results)];
+    res.json({ results });
   } catch (err) {
-    gallery.innerHTML = "❌ Error scraping.";
-    console.error(err);
+    res.status(500).json({ error: "Scraping failed", details: err.message });
   }
-}
+};
